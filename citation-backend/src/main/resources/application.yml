@@ -38,6 +38,15 @@ crawler:
     user-agent: "Mozilla/5.0 (Educational Purpose; Citation Research System)"
     # 是否使用Selenium爬虫（true: Selenium无头浏览器, false: Jsoup静态解析）
     use-selenium: true
+  
+  google-scholar:
+    # 是否启用Google Scholar爬虫（false: 使用Mock数据, true: 真实爬取）
+    enabled: true
+    # 镜像站点URL（可选择不同的镜像站点）
+    mirror-url: https://scholar.lanfanshu.cn
+    # 备用镜像站点（当主镜像失败时自动切换）
+    # - https://xs.dailyheadlines.cc
+    # - https://sc.panda321.com
 
 # 搜索配置
 search:

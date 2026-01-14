@@ -41,18 +41,18 @@ public class SearchService {
                 .flatMap(keywords -> {
                     log.info("提取的关键词: {}", keywords);
                     
-                    // 并行搜索谷歌学术和知网
+                    // 并行搜索谷歌学术和知网，缩短超时时间以快速响应
                     Mono<List<Citation>> googleResults = googleScholarService.search(keywords)
-                            .timeout(Duration.ofSeconds(3))
+                            .timeout(Duration.ofSeconds(20))
                             .onErrorResume(e -> {
-                                log.warn("谷歌学术搜索失败", e);
+                                log.error("谷歌学术搜索失败: {}", e.getMessage());
                                 return Mono.just(List.of());
                             });
                     
                     Mono<List<Citation>> cnkiResults = cnkiService.search(keywords)
-                            .timeout(Duration.ofSeconds(3))
+                            .timeout(Duration.ofSeconds(20))
                             .onErrorResume(e -> {
-                                log.warn("知网搜索失败", e);
+                                log.error("知网搜索失败: {}", e.getMessage());
                                 return Mono.just(List.of());
                             });
                     
@@ -78,7 +78,14 @@ public class SearchService {
                                     
                                     SearchResponse response = new SearchResponse();
                                     response.setSuccess(true);
-                                    response.setMessage("搜索成功");
+                                    
+                                    // 根据结果数量设置不同的消息
+                                    if (sortedCitations.isEmpty()) {
+                                        response.setMessage("搜索完成，但未找到相关文献。建议尝试其他关键词。");
+                                    } else {
+                                        response.setMessage(String.format("搜索成功，找到 %d 条相关文献", sortedCitations.size()));
+                                    }
+                                    
                                     response.setKeywords(tuple.getT3());
                                     response.setCitations(sortedCitations);
                                     response.setDuration(System.currentTimeMillis() - startTime);
@@ -89,6 +96,16 @@ public class SearchService {
                                     return response;
                                 });
                             });
+                })
+                .timeout(Duration.ofSeconds(45))
+                .onErrorResume(e -> {
+                    log.error("搜索超时或失败: {}", e.getMessage());
+                    SearchResponse errorResponse = new SearchResponse();
+                    errorResponse.setSuccess(false);
+                    errorResponse.setMessage("搜索超时，请稍后重试或使用更具体的关键词");
+                    errorResponse.setCitations(List.of());
+                    errorResponse.setDuration(System.currentTimeMillis() - startTime);
+                    return Mono.just(errorResponse);
                 });
     }
 
