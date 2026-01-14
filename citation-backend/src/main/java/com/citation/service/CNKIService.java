@@ -1,14 +1,20 @@
 package com.citation.service;
 
+import com.citation.config.CrawlerConfig;
+import com.citation.crawler.CNKICrawler;
+import com.citation.crawler.SeleniumCNKICrawler;
 import com.citation.dto.Citation;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.TimeoutException;
 
 /**
  * 中国知网服务
@@ -16,15 +22,16 @@ import java.util.Random;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class CNKIService {
 
-    @Value("${academic.cnki.api-key:}")
-    private String apiKey;
-
-    @Value("${academic.cnki.endpoint:}")
-    private String endpoint;
-
+    private final CrawlerConfig crawlerConfig;
+    private final CNKICrawler jsoupCrawler;
+    private final SeleniumCNKICrawler seleniumCrawler;
     private final Random random = new Random();
+    
+    @Value("${crawler.cnki.use-selenium:true}")
+    private boolean useSelenium;
 
     /**
      * 搜索文献
@@ -33,10 +40,52 @@ public class CNKIService {
      * @return 文献列表
      */
     public Mono<List<Citation>> search(List<String> keywords) {
-        log.info("知网搜索，关键词: {}", keywords);
+        String crawlerType = useSelenium ? "Selenium" : "Jsoup";
+        log.info("知网搜索，关键词: {}, 爬虫模式: {}, 爬虫类型: {}", 
+                keywords, crawlerConfig.isEnabled(), crawlerType);
         
-        // 生成模拟数据用于演示
-        // 实际项目中应该调用真实的知网 API
+        if (crawlerConfig.isEnabled()) {
+            // 爬虫模式：真实爬取知网
+            return searchViaCrawler(keywords)
+                    .onErrorResume(e -> {
+                        log.warn("知网爬虫失败，降级到Mock数据: {}", e.getMessage());
+                        return searchViaMock(keywords);
+                    });
+        } else {
+            // Mock模式：返回模拟数据
+            return searchViaMock(keywords);
+        }
+    }
+
+    /**
+     * 通过爬虫搜索文献
+     */
+    private Mono<List<Citation>> searchViaCrawler(List<String> keywords) {
+        if (useSelenium) {
+            // 使用Selenium爬虫
+            log.debug("使用Selenium爬虫");
+            return Mono.fromCallable(() -> seleniumCrawler.crawl(keywords))
+                    .timeout(Duration.ofSeconds(30))  // Selenium需要更长时间
+                    .onErrorMap(java.util.concurrent.TimeoutException.class,
+                            e -> new RuntimeException("Selenium爬取超时（30秒），请稍后重试", e))
+                    .doOnSuccess(citations -> log.info("Selenium爬虫返回 {} 条结果", citations.size()))
+                    .doOnError(e -> log.error("Selenium爬虫异常: {}", e.getMessage()));
+        } else {
+            // 使用Jsoup爬虫
+            log.debug("使用Jsoup爬虫");
+            return Mono.fromCallable(() -> jsoupCrawler.crawl(keywords))
+                    .timeout(Duration.ofSeconds(15))
+                    .onErrorMap(java.util.concurrent.TimeoutException.class,
+                            e -> new RuntimeException("Jsoup爬取超时（15秒），请稍后重试", e))
+                    .doOnSuccess(citations -> log.info("Jsoup爬虫返回 {} 条结果", citations.size()))
+                    .doOnError(e -> log.error("Jsoup爬虫异常: {}", e.getMessage()));
+        }
+    }
+
+    /**
+     * 使用Mock数据
+     */
+    private Mono<List<Citation>> searchViaMock(List<String> keywords) {
         return Mono.fromCallable(() -> {
             List<Citation> citations = new ArrayList<>();
             
@@ -53,7 +102,7 @@ public class CNKIService {
                 citations.add(citation);
             }
             
-            log.info("知网返回 {} 条结果", citations.size());
+            log.info("知网Mock返回 {} 条结果", citations.size());
             return citations;
         });
     }
