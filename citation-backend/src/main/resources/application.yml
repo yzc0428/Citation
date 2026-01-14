@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: citation-backend
+
+logging:
+  level:
+    root: INFO
+    com.citation: DEBUG
+
+# AI 服务配置（需要配置实际的 API Key）
+ai:
+  service:
+    api-key: ${AI_API_KEY:your-api-key-here}
+    endpoint: ${AI_ENDPOINT:https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation}
+
+# 学术数据库配置
+academic:
+  google-scholar:
+    api-key: ${GOOGLE_SCHOLAR_API_KEY:your-api-key-here}
+    endpoint: ${GOOGLE_SCHOLAR_ENDPOINT:https://serpapi.com/search}
+  cnki:
+    api-key: ${CNKI_API_KEY:your-api-key-here}
+    endpoint: ${CNKI_ENDPOINT:http://api.cnki.net/search}
+
+# 搜索配置
+search:
+  max-results: 10
+  timeout-seconds: 5
+  max-retry: 3
